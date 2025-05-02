@@ -15,10 +15,22 @@ def build_extentions(address: str) -> bytes:
     
     extentions += b"\x00\x00" + len(server_name_extention).to_bytes(2)
     extentions += server_name_extention
-
-    #extention: signature_algorithms 
-    #extention: supported_groups 
+    
     #extention: ec_point_formats 
+
+    #type: ec_points_formant
+    extentions += b"\x00\x0b"
+    #length of the extention is 4
+    extentions += b"\x00\x04"
+    #ec points format length
+    extentions += b"\x03"
+    #ec points format: uncompressed, ansiX962 compressed prime, ansiX962 compressed char2
+    extentions += b"\x00\x01\x02"
+
+
+    #extention: signature_algorithms
+    #extention: supported_groups 
+    
     #extention: extended_master_secret 
     #extention: renegotiation_info
 

@@ -10,7 +10,7 @@ __author__ = "Nadav Salem"
 
 
 
-#client command: openssl s_client -connect www.google.com:443 -crlf -cipher 'ECDHE-RSA-AES128-GCM-SHA256' --sigalgs -tls1_2
+#client command: openssl s_client -connect www.google.com:443 -crlf -cipher 'ECDHE-RSA-AES128-GCM-SHA256' -sigalgs rsa_pss_rsae_sha256 -tls1_2
 #openssl s_client -connect www.google.com:443 -crlf -tls1_2
 #follwing this page: https://tls13.xargs.org/#client-hello/annotated
 
