@@ -17,7 +17,6 @@ def build_extentions(address: str) -> bytes:
     extentions += server_name_extention
     
     #extention: ec_point_formats 
-
     #type: ec_points_formant
     extentions += b"\x00\x0b"
     #length of the extention is 4
@@ -28,11 +27,23 @@ def build_extentions(address: str) -> bytes:
     extentions += b"\x00\x01\x02"
 
 
-    #extention: signature_algorithms
     #extention: supported_groups 
-    
+    #type: supported_groups
+    extentions += b"\x00\x0a"
+    #length of the extention
+    extentions += b"\x00\x04"
+    #supported groups list length 2 because we have 1 group
+    extentions += b"\x00\x02"
+    #supported group: x25519
+    extentions += b"\x00\x1D"
+
+    #extention: session ticket
+    #extention: encrypt than mac
     #extention: extended_master_secret 
-    #extention: renegotiation_info
+    #extention: signature_algorithms
+
+
+    #extention: supported versions
 
     
     return extentions

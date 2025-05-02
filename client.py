@@ -1,6 +1,6 @@
 __author__ = "Nadav Salem"
 
-#Tls 1.3 client implementation
+#Tls 1.2 client implementation
 
 #This Client Uses cipher: ECDHE-RSA-AES128-GCM-SHA256
 
