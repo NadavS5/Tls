@@ -1,2 +1,3 @@
 .venv
-packets/www.google.com.pcapng
+*.pcapng
+*.pyc

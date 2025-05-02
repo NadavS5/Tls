@@ -20,7 +20,7 @@ from Crypto.Cipher import AES
 from Crypto.Protocol import DH
 from Crypto.PublicKey import RSA, ECC
 from Crypto.Hash import SHA384
-
+from handshakeuitls import build_extentions
 
 RSA_PSS_RSAE_SHA246 = b"\x08\x04"
 ECDHE_RSA_AES256_GCM_SHA256 = b"\xC0\x30"
@@ -60,20 +60,11 @@ class tls_connection:
         #length 1: compression type = null
         handshake_message += b"\x01" + b"\x00"
 
-        extentions = b""
-
-        #type: hostname, host_length, host
-
-        server_name_list = b"\x00" + len(self.address).to_bytes(2) + self.address.encode()
-
-        server_name_extention = len(server_name_list).to_bytes(2) + server_name_list
-        #extention: server_name
-        extentions += b"\x00\x00" + len(server_name_extention).to_bytes(2) + server_name_extention
-
-
-        handshake_message += len(extentions).to_bytes(2) + extentions
+       
+        extentions_full = build_extentions(self.address)
+        handshake_message += len(extentions_full).to_bytes(2) + extentions_full
         
-
+        #type: client hello
         handshake_header = b"\x01" + len(handshake_message).to_bytes(3)
         handshake_msg_full = handshake_header + handshake_message
 
