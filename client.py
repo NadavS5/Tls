@@ -92,14 +92,16 @@ class tls_connection:
         with open("sh.bin", "wb") as f:
             f.write(self.sock.recv(1024))
 
-    def _recv_server_hello_and_certs(self):
+    def _recv_server_hello_(self):
         data = self._recv_by_size(4)
         assert data[0] == 22, "recieved messsage isnt client hello"
         assert data[1:3] == b"\x03\x03", "recieved tls packet isnt TLS1.2"
         
-        length = int.from_bytes(data[3:5])
-        server_hello = self._recv_by_size(length)
-
+        server_hello_length = int.from_bytes(data[3:5])
+        server_hello = self._recv_by_size(server_hello_length)
+    
+    def _recv_certs(self):
+        pass
 
 
 
@@ -108,7 +110,8 @@ class tls_connection:
 
         self.sock.connect((self.address, self.port))
         self._send_client_hello()
-        self._recv_server_hello_and_certs()
+        self._recv_server_hello()
+        self._recv_certs()
         
 
     
