@@ -20,7 +20,7 @@ from Crypto.Cipher import AES
 from Crypto.Protocol import DH
 from Crypto.PublicKey import RSA, ECC
 from Crypto.Hash import SHA384
-from handshakeuitls import build_extentions
+from handshakeuitls import build_extensions
 # from Crypto.Util.asn1 import DerBitString #for certs
 
 from constants import ECDHE_RSA_AES256_GCM_SHA256
@@ -74,8 +74,8 @@ class tls_connection:
         handshake_message += b"\x01" + b"\x00"
 
        
-        extentions_full = build_extentions(self.address)
-        handshake_message += len(extentions_full).to_bytes(2) + extentions_full
+        extensions_full = build_extensions(self.address)
+        handshake_message += len(extensions_full).to_bytes(2) + extensions_full
         
         #type: client hello
         handshake_header = b"\x01" + len(handshake_message).to_bytes(3)
@@ -88,12 +88,9 @@ class tls_connection:
         #Handshake, protocol version, handshake message length
         self.sock.send(b"\x16\x03\x03" + len(handshake_msg_full).to_bytes(2) + handshake_msg_full)
 
-    def _recv_server_hello(self):
-        with open("sh.bin", "wb") as f:
-            f.write(self.sock.recv(1024))
 
-    def _recv_server_hello_(self):
-        data = self._recv_by_size(4)
+    def _recv_server_hello(self):
+        data = self._recv_by_size(6)
         assert data[0] == 22, "recieved messsage isnt client hello"
         assert data[1:3] == b"\x03\x03", "recieved tls packet isnt TLS1.2"
         
