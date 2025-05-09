@@ -22,6 +22,7 @@ from Crypto.PublicKey import RSA, ECC
 from Crypto.Hash import SHA384
 from handshakeuitls import build_extensions
 from Crypto.Util.asn1 import DerBitString, DerSequence #for certs
+from asn1crypto.x509 import Certificate
 
 from constants import ECDHE_RSA_AES256_GCM_SHA256
 
@@ -137,8 +138,8 @@ class tls_connection:
         print("certs length: ",certs_length)
 
         certs_data = self._recv_by_size(certs_length)
-        certs = self.__get_certs(certs_data)
-
+        byte_certs = self.__get_certs(certs_data)
+        certs = [Certificate.load(cert) for cert in byte_certs]
 
 
 
