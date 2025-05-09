@@ -21,7 +21,7 @@ from Crypto.Protocol import DH
 from Crypto.PublicKey import RSA, ECC
 from Crypto.Hash import SHA384
 from handshakeuitls import build_extentions
-
+# from Crypto.Util.asn1 import DerBitString #for certs
 
 from constants import ECDHE_RSA_AES256_GCM_SHA256
 
@@ -32,6 +32,9 @@ class tls_connection:
     client_pre_master: bytes
     server_random: bytes
 
+    
+    client_certs: list[bytes]
+
 
     def __init__(self, address: str, port:int, sock = None):
         self.address = address
@@ -40,6 +43,16 @@ class tls_connection:
 
         if not sock:
             self.sock = socket()
+
+    def _recv_by_size(self, size):
+        buff = b""
+        while(size > 0):
+            recv = self.sock.recv(size)
+            if recv == b"":
+                return b""
+            size-= len(recv)
+            buff += recv
+        return buff
 
     def _send_client_hello(self):
         self.client_random = urandom(32)
@@ -78,17 +91,25 @@ class tls_connection:
     def _recv_server_hello(self):
         with open("sh.bin", "wb") as f:
             f.write(self.sock.recv(1024))
-    def _recv_server_certificate(self):
-        with open("sh.bin", "wb") as f:
-            f.write(self.sock.recv(4096 * 2))
+
+    def _recv_server_hello_and_certs(self):
+        data = self._recv_by_size(4)
+        assert data[0] == 22, "recieved messsage isnt client hello"
+        assert data[1:3] == b"\x03\x03", "recieved tls packet isnt TLS1.2"
+        
+        length = int.from_bytes(data[3:5])
+        server_hello = self._recv_by_size(length)
+
+
+
+
+        
     def connect(self):
-        
-        
+
         self.sock.connect((self.address, self.port))
         self._send_client_hello()
-        self._recv_server_hello()
-        self._recv_server_certificate()
-
+        self._recv_server_hello_and_certs()
+        
 
     
 if __name__ == "__main__" :
