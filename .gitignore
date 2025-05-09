@@ -1,3 +1,5 @@
 .venv
 *.pcapng
 *.pyc
+__pycache__
+*.bin

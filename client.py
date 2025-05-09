@@ -22,8 +22,9 @@ from Crypto.PublicKey import RSA, ECC
 from Crypto.Hash import SHA384
 from handshakeuitls import build_extentions
 
-RSA_PSS_RSAE_SHA246 = b"\x08\x04"
-ECDHE_RSA_AES256_GCM_SHA256 = b"\xC0\x30"
+
+from constants import ECDHE_RSA_AES256_GCM_SHA256
+
 class tls_connection:
 
 
@@ -43,7 +44,6 @@ class tls_connection:
     def _send_client_hello(self):
         self.client_random = urandom(32)
 
-        #Handshake, protocol version, handshake message length
         
         #version
         handshake_message = b"\x03\x03"
@@ -71,16 +71,23 @@ class tls_connection:
     
         
         print(f"length: {len(handshake_msg_full)}")
-        #type: client hello
+
+        #Handshake, protocol version, handshake message length
         self.sock.send(b"\x16\x03\x03" + len(handshake_msg_full).to_bytes(2) + handshake_msg_full)
 
+    def _recv_server_hello(self):
+        with open("sh.bin", "wb") as f:
+            f.write(self.sock.recv(1024))
+    def _recv_server_certificate(self):
+        with open("sh.bin", "wb") as f:
+            f.write(self.sock.recv(4096 * 2))
     def connect(self):
         
         
         self.sock.connect((self.address, self.port))
         self._send_client_hello()
-        
-    
+        self._recv_server_hello()
+        self._recv_server_certificate()
 
 
     
