@@ -90,15 +90,43 @@ class tls_connection:
 
 
     def _recv_server_hello(self):
-        data = self._recv_by_size(6)
-        assert data[0] == 22, "recieved messsage isnt client hello"
-        assert data[1:3] == b"\x03\x03", "recieved tls packet isnt TLS1.2"
+        data = self._recv_by_size(5)
+        assert data[0] == 22, "received message isnt handshake"
+        assert data[1:3] == b"\x03\x03", "received tls packet isnt TLS1.2"
         
         server_hello_length = int.from_bytes(data[3:5])
         server_hello = self._recv_by_size(server_hello_length)
-    
+
+    def __get_certs(self, data:bytes, length: int) ->list[bytes]:
+        """this is a helper function for _recv_certs that returns the certs from Certification packet Certifications field"""
+        #structred like this (length : 3 bytes, cert: length bytes)
+
+
+
+
     def _recv_certs(self):
-        pass
+        """
+        this function receives and processes the Certificate packets
+        """
+        data = self._recv_by_size(6)
+        assert data[0] == 22, "received message isnt handshake"
+        assert data[1:3] == b"\x03\x03", "received tls packet isnt TLS1.2"
+        tls_packet_length = int.from_bytes(data[3:5])
+        print("tls packet length: ", tls_packet_length)
+        handshake_type = data[5]
+        assert handshake_type == 11, "received packet isnt a Certification handshake type "
+
+        message_length = int.from_bytes(self._recv_by_size(3))
+        print("message length: ", message_length)
+
+        certs_length = int.from_bytes(self._recv_by_size(3))
+        print("certs length: ",certs_length)
+
+        certs_data = self._recv_by_size(certs_length)
+        num_of_certs = self.__get_certs(certs_data, certs_length)
+
+
+
 
 
 
