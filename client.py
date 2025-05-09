@@ -21,7 +21,7 @@ from Crypto.Protocol import DH
 from Crypto.PublicKey import RSA, ECC
 from Crypto.Hash import SHA384
 from handshakeuitls import build_extensions
-# from Crypto.Util.asn1 import DerBitString #for certs
+from Crypto.Util.asn1 import DerBitString, DerSequence #for certs
 
 from constants import ECDHE_RSA_AES256_GCM_SHA256
 
@@ -97,11 +97,25 @@ class tls_connection:
         server_hello_length = int.from_bytes(data[3:5])
         server_hello = self._recv_by_size(server_hello_length)
 
-    def __get_certs(self, data:bytes, length: int) ->list[bytes]:
+    @staticmethod
+    def __get_certs(data: bytes) ->list[bytes]:
         """this is a helper function for _recv_certs that returns the certs from Certification packet Certifications field"""
         #structred like this (length : 3 bytes, cert: length bytes)
+        current = 0
+        cnt = 0
+        certs = []
 
+        while True and cnt < 5:
+            cnt +=1
+            length = int.from_bytes(data[current : current + 3])
+            current +=3
+            certs.append(data[current : current + length])
+            current += length
+            print(current, len(data))
+            if current == len(data):
+                break
 
+        return certs
 
 
     def _recv_certs(self):
@@ -123,7 +137,7 @@ class tls_connection:
         print("certs length: ",certs_length)
 
         certs_data = self._recv_by_size(certs_length)
-        num_of_certs = self.__get_certs(certs_data, certs_length)
+        certs = self.__get_certs(certs_data)
 
 
 
