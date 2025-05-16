@@ -19,11 +19,12 @@ from os import urandom
 from Crypto.Cipher import AES
 from Crypto.Protocol import DH
 from Crypto.PublicKey import RSA, ECC
-from Crypto.Hash import SHA384
-from handshakeuitls import build_extensions
+from Crypto.Hash import SHA384, SHA256
 from Crypto.Util.asn1 import DerBitString, DerSequence #for certs
 from asn1crypto.x509 import Certificate
+from pprint import  pprint
 
+from handshakeutils import build_extensions, verify_signature
 from constants import ECDHE_RSA_AES256_GCM_SHA256
 
 class tls_connection:
@@ -34,7 +35,7 @@ class tls_connection:
     server_random: bytes
 
     
-    client_certs: list[bytes]
+    server_certs: list[Certificate]
 
 
     def __init__(self, address: str, port:int, sock = None):
@@ -78,7 +79,7 @@ class tls_connection:
         extensions_full = build_extensions(self.address)
         handshake_message += len(extensions_full).to_bytes(2) + extensions_full
         
-        #type: client hello
+        #type: client_hello
         handshake_header = b"\x01" + len(handshake_message).to_bytes(3)
         handshake_msg_full = handshake_header + handshake_message
 
@@ -141,8 +142,25 @@ class tls_connection:
         byte_certs = self.__get_certs(certs_data)
         certs = [Certificate.load(cert) for cert in byte_certs]
 
+        self.server_certs = certs
+
+        algorithm = certs[0].native['signature_algorithm']['algorithm']
+        issuer = certs[0].native['tbs_certificate']['issuer']['common_name']
+        signature = certs[0].native['signature_value']
+        cert_hash = SHA256.new( certs[0]['tbs_certificate'].dump() )
 
 
+        if not verify_signature(signature,cert_hash,issuer ):
+            raise  Exception("certificate verification failed")
+
+        pkey_ = certs[0].native['tbs_certificate']['subject_public_key_info']['public_key']
+        pkey = RSA.construct((pkey_['modulus'], pkey_['public_exponent']))
+
+
+
+
+    def recv_key_exchange(self):
+        pass
 
 
         
@@ -152,7 +170,7 @@ class tls_connection:
         self._send_client_hello()
         self._recv_server_hello()
         self._recv_certs()
-        
+        self.recv_key_exchange()
 
     
 if __name__ == "__main__" :

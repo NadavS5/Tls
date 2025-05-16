@@ -1,4 +1,9 @@
 from constants import RSA_PSS_RSAE_SHA256
+from asn1crypto.x509 import  Certificate
+from pprint import  pprint
+from Crypto.PublicKey import RSA
+from Crypto.Signature import PKCS1_v1_5
+from  Crypto.Hash import  SHA256
 
 def build_extensions(address: str) -> bytes:
     'this doesnt returns the length field of the whole extensions (extensions Length)'
@@ -64,3 +69,22 @@ def build_extensions(address: str) -> bytes:
 
     
     return extensions
+
+def verify_signature(signature: bytes,cert_hash, issuer: str)-> bool:
+    """
+    this function receives certificate fingerprint and verifies it by the ca that signed it
+    cert_hash is pre digested SHA256 object that contains the tbs_certificate data
+
+    Currently works only with WR2 signed certs, once finished I will add all
+    """
+    with open("wr2.crt", 'rb') as f :
+
+        wr2_cert_ = f.read()
+        wr2_cert = Certificate.load(wr2_cert_)
+        # pprint(wr2_cert.native['tbs_certificate']['subject_public_key_info'])
+        N = wr2_cert.native['tbs_certificate']['subject_public_key_info']['public_key']['modulus']
+        E = wr2_cert.native['tbs_certificate']['subject_public_key_info']['public_key']['public_exponent']
+
+        wr2_key = RSA.construct((N,E))
+        cipher = PKCS1_v1_5.new(wr2_key)
+        return cipher.verify(cert_hash,signature)
