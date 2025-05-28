@@ -2,8 +2,8 @@ from constants import RSA_PSS_RSAE_SHA256
 from asn1crypto.x509 import  Certificate
 from pprint import  pprint
 from Crypto.PublicKey import RSA
-from Crypto.Signature import PKCS1_v1_5
-from  Crypto.Hash import  SHA256
+from Crypto.Signature import PKCS1_v1_5, pss
+from Crypto.Hash import  SHA256
 
 def build_extensions(address: str) -> bytes:
     'this doesnt returns the length field of the whole extensions (extensions Length)'
@@ -88,3 +88,18 @@ def verify_signature(signature: bytes,cert_hash, issuer: str)-> bool:
         wr2_key = RSA.construct((N,E))
         cipher = PKCS1_v1_5.new(wr2_key)
         return cipher.verify(cert_hash,signature)
+def verify_key_exch_signature(pkey: RSA.RsaKey, signature: bytes, hash)-> bool:
+    """
+    this function receives pre digested SHA256 object that contains:
+    client_hello_random + server_hello_random + curve_info + public_key
+
+    and verifies it against the server computed signature
+    """
+
+    our_sig = pss.new(pkey)
+    try:
+        our_sig.verify(hash,signature)
+    except ValueError as e:
+        return False
+    else:
+        return True

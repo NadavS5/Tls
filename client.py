@@ -16,6 +16,7 @@ __author__ = "Nadav Salem"
 
 from socket import socket
 from os import urandom
+from Crypto.Signature import pss 
 from Crypto.Cipher import AES
 from Crypto.Protocol import DH
 from Crypto.PublicKey import RSA, ECC
@@ -24,8 +25,8 @@ from Crypto.Util.asn1 import DerBitString, DerSequence #for certs
 from asn1crypto.x509 import Certificate
 from pprint import  pprint
 
-from handshakeutils import build_extensions, verify_signature
-from constants import ECDHE_RSA_AES256_GCM_SHA256
+from handshakeutils import build_extensions, verify_signature, verify_key_exch_signature
+from constants import ECDHE_RSA_AES256_GCM_SHA256, RSA_PSS_RSAE_SHA256
 
 class tls_connection:
 
@@ -33,7 +34,7 @@ class tls_connection:
     client_random: bytes
     client_pre_master: bytes
     server_random: bytes
-
+    server_pkey: RSA.RsaKey
     
     server_certs: list[Certificate]
 
@@ -99,6 +100,13 @@ class tls_connection:
         server_hello_length = int.from_bytes(data[3:5])
         server_hello = self._recv_by_size(server_hello_length)
 
+        assert server_hello[0] == 2, "this packet isn't server hello"
+
+        server_random = server_hello[6: 6 + 32]
+        self.server_random = server_random
+        print(server_random.hex())
+        
+
     @staticmethod
     def __get_certs(data: bytes) ->list[bytes]:
         """this is a helper function for _recv_certs that returns the certs from Certification packet Certifications field"""
@@ -151,11 +159,11 @@ class tls_connection:
 
 
         if not verify_signature(signature,cert_hash,issuer ):
-            raise  Exception("certificate verification failed")
+            raise Exception("certificate verification failed")
 
         pkey_ = certs[0].native['tbs_certificate']['subject_public_key_info']['public_key']
         pkey = RSA.construct((pkey_['modulus'], pkey_['public_exponent']))
-
+        self.server_pkey = pkey
 
 
 
@@ -166,9 +174,12 @@ class tls_connection:
 
         message_length = int.from_bytes(data[3:5])
         assert message_length > 4, "empty packet"
+
         message = self._recv_by_size(message_length)
         assert message[:4] == b"\x0c\x00\x01\x28", "packet isn't key exchange"
-        assert message[4:7] == b"\x03\x00\x1d"
+
+        curve_info = message[4:7]
+        assert curve_info == b"\x03\x00\x1d", "unsupported curve type"
         print("using curve x25519")
 
         pkey_length = message[7]
@@ -176,7 +187,18 @@ class tls_connection:
         pkey = message[8:8+pkey_length]
 
         sig_index = 8+ pkey_length
-        print(message[sig_index: sig_index + 4])
+        assert message[sig_index: sig_index + 2] == RSA_PSS_RSAE_SHA256, f"signature algorithm isnt {RSA_PSS_RSAE_SHA256}"
+        
+        sig_length = int.from_bytes(message[sig_index + 2: sig_index+4])
+        
+        signature = message[sig_index + 4: 4 + sig_index + sig_length]
+        # print(len(signature))
+
+        # https://datatracker.ietf.org/doc/html/rfc5246#section-7.4.1.3 for the hash input
+        # https://www.rfc-editor.org/rfc/rfc4492.html#section-5.4 for the ECDHE_RSA extention in the hash input
+        if not verify_key_exch_signature(self.server_pkey, signature, SHA256.new(self.client_random + self.server_random +curve_info+b"\x20"+ pkey)):
+            raise Exception("key exchange verification failed")
+
 
         
     def connect(self):
