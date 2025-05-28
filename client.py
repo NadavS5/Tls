@@ -159,9 +159,24 @@ class tls_connection:
 
 
 
-    def recv_key_exchange(self):
-        pass
+    def _recv_key_exchange(self):
+        data = self._recv_by_size(5)
+        assert data[0] == 22, "received message isnt handshake"
+        assert data[1:3] == b"\x03\x03", "received tls packet isnt TLS1.2"
 
+        message_length = int.from_bytes(data[3:5])
+        assert message_length > 4, "empty packet"
+        message = self._recv_by_size(message_length)
+        assert message[:4] == b"\x0c\x00\x01\x28", "packet isn't key exchange"
+        assert message[4:7] == b"\x03\x00\x1d"
+        print("using curve x25519")
+
+        pkey_length = message[7]
+        print("public key length:", message[7])
+        pkey = message[8:8+pkey_length]
+
+        sig_index = 8+ pkey_length
+        print(message[sig_index: sig_index + 4])
 
         
     def connect(self):
@@ -170,7 +185,7 @@ class tls_connection:
         self._send_client_hello()
         self._recv_server_hello()
         self._recv_certs()
-        self.recv_key_exchange()
+        self._recv_key_exchange()
 
     
 if __name__ == "__main__" :
