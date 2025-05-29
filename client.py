@@ -255,6 +255,34 @@ class tls_connection:
         pre_master_secret = DH.key_agreement(static_priv= self.client_ec_private,eph_pub= self.server_ec_public, kdf=func)
 
 
+    def _send_client_change_cipher(self):
+        #ChangeCipherSpec record
+        record = b"\x14"
+
+        #version
+        record += b"\x03\x03"
+
+        #1 byte following
+        record += b"\x00\x01"
+        #payload of this message
+        record += b"\x01"
+        
+        self.sock.send(record)
+
+
+    def _send_client_handshake_finish(self):
+        #bruh
+        #TODO
+        #collect all the messages in the given order without the 5-bytes header
+        #clienthello
+        #serverhello
+        #servercert
+        #serverkeyexchange
+        #serverhellodone
+        #clientkeyexchange
+        pass
+
+
         
     def connect(self):
 
@@ -266,8 +294,8 @@ class tls_connection:
         self.__generate_keys()
         self._send_client_key_exchange()
         self.__calc_symmetric_key()
-        # self._send_client_change_cipher()
-        # self._send_client_handshake_finish()
+        self._send_client_change_cipher()
+        self._send_client_handshake_finish()
         # self._recv_change_cipher()
         # self._recv_handshake_finish()
     
