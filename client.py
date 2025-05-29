@@ -247,8 +247,7 @@ class tls_connection:
         print(repr(self.client_ec_private))
         print(repr(self.server_ec_public))
         def func(*args, **kwargs):
-            server_write = calc_symetric_key(args[0], self.client_random, self.server_random)
-            client_write = calc_symetric_key(args[0], self.client_random, self.server_random)
+            client_write, server_write = calc_symetric_key(args[0], self.client_random, self.server_random)
 
             self.server_write_key = server_write
             self.client_write_key = client_write

@@ -121,7 +121,7 @@ def prf(secret: bytes, label: bytes, seed: bytes, size: int) -> bytes:
 
     return p_hash(secret, label + seed)
 
-def calc_symetric_key(pre_master_secret: bytes, client_random: bytes, server_random: bytes) -> _mode_gcm.GcmMode:
+def calc_symetric_key(pre_master_secret: bytes, client_random: bytes, server_random: bytes) -> tuple[_mode_gcm.GcmMode, _mode_gcm.GcmMode] :
     """
     this function receives the vars needed to generate the final aes key in the tls protocol
 
