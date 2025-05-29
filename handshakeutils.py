@@ -3,7 +3,8 @@ from asn1crypto.x509 import  Certificate
 from pprint import  pprint
 from Crypto.PublicKey import RSA
 from Crypto.Signature import PKCS1_v1_5, pss
-from Crypto.Hash import  SHA256
+from Crypto.Hash import  SHA256, HMAC, SHA384
+from Crypto.Cipher import AES, _mode_gcm
 
 def build_extensions(address: str) -> bytes:
     'this doesnt returns the length field of the whole extensions (extensions Length)'
@@ -88,6 +89,7 @@ def verify_signature(signature: bytes,cert_hash, issuer: str)-> bool:
         wr2_key = RSA.construct((N,E))
         cipher = PKCS1_v1_5.new(wr2_key)
         return cipher.verify(cert_hash,signature)
+
 def verify_key_exch_signature(pkey: RSA.RsaKey, signature: bytes, hash)-> bool:
     """
     this function receives pre digested SHA256 object that contains:
@@ -103,3 +105,54 @@ def verify_key_exch_signature(pkey: RSA.RsaKey, signature: bytes, hash)-> bool:
         return False
     else:
         return True
+
+
+def prf(secret: bytes, label: bytes, seed: bytes, size: int) -> bytes:
+    """
+    TLS 1.2 Pseudo-Random Function using HMAC-SHA384
+    """
+    def p_hash(secret: bytes, seed: bytes) -> bytes:
+        result = b""
+        A = seed
+        while len(result) < size:
+            A = HMAC.new(secret, A, SHA384).digest()
+            result += HMAC.new(secret, A + seed, SHA384).digest()
+        return result[:size]
+
+    return p_hash(secret, label + seed)
+
+def calc_symetric_key(pre_master_secret: bytes, client_random: bytes, server_random: bytes) -> _mode_gcm.GcmMode:
+    """
+    this function receives the vars needed to generate the final aes key in the tls protocol
+
+    it returns client_write_key, server_write_key
+    """
+
+    #-------master secret-------#
+    master_secret = prf(
+        pre_master_secret,
+        b"master secret",
+        server_random + client_random,
+        48
+    )
+    
+
+    #-------key expansion-------#
+    
+    key_block_length = 32 + 32 + 4 + 4
+    key_block = prf(
+        master_secret,
+        b"key expansion",
+        server_random + client_random,
+        key_block_length
+    )
+
+    client_write_key = key_block[0:32]
+    server_write_key = key_block[32:64]
+    client_iv = key_block[64:68]
+    server_iv = key_block[68:72]
+
+    client_write = AES.new(client_write_key, AES.MODE_GCM, nonce=client_iv)
+    server_write = AES.new(key = server_write_key, mode = AES.MODE_GCM, nonce=server_iv)
+
+    return client_write, server_write

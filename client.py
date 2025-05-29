@@ -2,7 +2,7 @@ __author__ = "Nadav Salem"
 
 #Tls 1.2 client implementation
 
-#This Client Uses cipher: ECDHE-RSA-AES128-GCM-SHA256
+#This Client Uses cipher: ECDHE-RSA-AES256-GCM-SHA384
 
 #elyptic curve diffie helman aes-gcm
 
@@ -17,7 +17,7 @@ __author__ = "Nadav Salem"
 from socket import socket
 from os import urandom
 from Crypto.Signature import pss 
-from Crypto.Cipher import AES
+from Crypto.Cipher import AES, _mode_gcm
 from Crypto.Protocol import DH
 from Crypto.PublicKey import RSA, ECC
 from Crypto.Hash import SHA384, SHA256
@@ -25,8 +25,8 @@ from Crypto.Util.asn1 import DerBitString, DerSequence #for certs
 from asn1crypto.x509 import Certificate
 from pprint import  pprint
 
-from handshakeutils import build_extensions, verify_signature, verify_key_exch_signature
-from constants import ECDHE_RSA_AES256_GCM_SHA256, RSA_PSS_RSAE_SHA256
+from handshakeutils import build_extensions, verify_signature, verify_key_exch_signature, calc_symetric_key
+from constants import ECDHE_RSA_AES256_GCM_SHA384, RSA_PSS_RSAE_SHA256
 
 class tls_connection:
 
@@ -43,6 +43,8 @@ class tls_connection:
     client_ec_private: ECC.EccKey
     client_ec_public: ECC.EccKey
 
+    server_write_key: _mode_gcm.GcmMode
+    client_write_key: _mode_gcm.GcmMode
 
     def __init__(self, address: str, port:int, sock = None):
         self.address = address
@@ -76,7 +78,7 @@ class tls_connection:
         handshake_message += b"\x20" + urandom(32)
 
         #length 2 + our cipher suit defined at top
-        handshake_message += b"\x00\x02" + ECDHE_RSA_AES256_GCM_SHA256
+        handshake_message += b"\x00\x02" + ECDHE_RSA_AES256_GCM_SHA384
 
         #length 1: compression type = null
         handshake_message += b"\x01" + b"\x00"
@@ -240,7 +242,18 @@ class tls_connection:
 
         self.sock.send(record_header + hs_header + pkey)
 
+    
+    def __calc_symmetric_key(self):
+        print(repr(self.client_ec_private))
+        print(repr(self.server_ec_public))
+        def func(*args, **kwargs):
+            server_write = calc_symetric_key(args[0], self.client_random, self.server_random)
+            client_write = calc_symetric_key(args[0], self.client_random, self.server_random)
 
+            self.server_write_key = server_write
+            self.client_write_key = client_write
+        
+        pre_master_secret = DH.key_agreement(static_priv= self.client_ec_private,eph_pub= self.server_ec_public, kdf=func)
 
 
         
@@ -253,7 +266,11 @@ class tls_connection:
         self._recv_key_exchange()
         self.__generate_keys()
         self._send_client_key_exchange()
-
+        self.__calc_symmetric_key()
+        # self._send_client_change_cipher()
+        # self._send_client_handshake_finish()
+        # self._recv_change_cipher()
+        # self._recv_handshake_finish()
     
 if __name__ == "__main__" :
     conn = tls_connection("www.google.com", 443)
