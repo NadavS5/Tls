@@ -34,9 +34,14 @@ class tls_connection:
     client_random: bytes
     client_pre_master: bytes
     server_random: bytes
+    server_certs: list[Certificate]
     server_pkey: RSA.RsaKey
     
-    server_certs: list[Certificate]
+    
+    server_pkey: RSA.RsaKey
+    server_ec_public: ECC.EccKey
+    client_ec_private: ECC.EccKey
+    client_ec_public: ECC.EccKey
 
 
     def __init__(self, address: str, port:int, sock = None):
@@ -166,7 +171,6 @@ class tls_connection:
         self.server_pkey = pkey
 
 
-
     def _recv_key_exchange(self):
         data = self._recv_by_size(5)
         assert data[0] == 22, "received message isnt handshake"
@@ -186,6 +190,9 @@ class tls_connection:
         print("public key length:", message[7])
         pkey = message[8:8+pkey_length]
 
+        self.server_ec_public = DH.import_x25519_public_key(pkey)
+
+
         sig_index = 8+ pkey_length
         assert message[sig_index: sig_index + 2] == RSA_PSS_RSAE_SHA256, f"signature algorithm isnt {RSA_PSS_RSAE_SHA256}"
         
@@ -199,6 +206,42 @@ class tls_connection:
         if not verify_key_exch_signature(self.server_pkey, signature, SHA256.new(self.client_random + self.server_random +curve_info+b"\x20"+ pkey)):
             raise Exception("key exchange verification failed")
 
+        #recieve server hello done
+        data = self._recv_by_size(5)
+        header = self._recv_by_size(int.from_bytes(data[3:5]))
+        assert header == b"\x0e\x00\x00\x00"
+    
+
+    def __generate_keys(self):
+        key = ECC.generate(curve = "curve25519")
+        
+        self.client_ec_private = key
+        self.client_ec_public = key.public_key()
+    
+
+    def _send_client_key_exchange(self):
+        
+        #0x20 -> 32 is the length of the curve
+        pkey = b"\x20" + self.client_ec_public.export_key(format = "raw")
+        
+        #handshake message type: client key exchange
+        hs_header = b"\x10"
+        #length of key of client key exchange follows
+        hs_header += len(pkey).to_bytes(3)
+
+        #type: handshake
+        record_header = b"\x16"
+
+        #protocol version: TLS1.2
+        record_header += b"\x03\x03"
+
+        #length of the rest of the message
+        record_header += (len(hs_header) + len(pkey)).to_bytes(2)
+
+        self.sock.send(record_header + hs_header + pkey)
+
+
+
 
         
     def connect(self):
@@ -208,6 +251,8 @@ class tls_connection:
         self._recv_server_hello()
         self._recv_certs()
         self._recv_key_exchange()
+        self.__generate_keys()
+        self._send_client_key_exchange()
 
     
 if __name__ == "__main__" :
