@@ -132,7 +132,7 @@ def calc_symetric_key(pre_master_secret: bytes, client_random: bytes, server_ran
     master_secret = prf(
         pre_master_secret,
         b"master secret",
-        server_random + client_random,
+        client_random + server_random,
         48
     )
     
