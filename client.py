@@ -10,7 +10,7 @@ __author__ = "Nadav Salem"
 
 
 
-#client command: openssl s_client -connect www.google.com:443 -crlf -cipher 'ECDHE-RSA-AES128-GCM-SHA256' -sigalgs rsa_pss_rsae_sha256 -tls1_2
+#client command: openssl s_client -connect www.google.com:443 -crlf -cipher 'ECDHE-RSA-AES256-GCM-SHA384' -sigalgs rsa_pss_rsae_sha256 -tls1_2
 #openssl s_client -connect www.google.com:443 -crlf -tls1_2
 #follwing this page: https://tls13.xargs.org/#client-hello/annotated
 
@@ -46,6 +46,7 @@ class tls_connection:
 
     server_write_key: _mode_gcm.GcmMode
     client_write_key: _mode_gcm.GcmMode
+    encyption_iv: 
 
     def __init__(self, address: str, port:int, sock = None):
         self.address = address
@@ -295,6 +296,18 @@ class tls_connection:
         #serverkeyexchange
         #serverhellodone
         #clientkeyexchange
+
+        record = b"\x16\x03\x03"
+
+        #0x14 (finished)
+        #
+        to_encrypt = b"\x14"
+
+        #length of verify data
+        to_encrypt ++"\x00\x00\x0c"
+
+
+
         pass
 
 
@@ -310,7 +323,7 @@ class tls_connection:
         self._send_client_key_exchange()
         self.__calc_symmetric_key()
         self._send_client_change_cipher()
-        self._send_client_handshake_finish()
+        # self._send_client_handshake_finish()
         # self._recv_change_cipher()
         # self._recv_handshake_finish()
     

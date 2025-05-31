@@ -39,9 +39,9 @@ def build_extensions(address: str) -> bytes:
 
     #extension: session ticket
     #type: session ticket
-    extensions += b"\x00\x23"
-    #length: 0 because we indicate that we have no session ticket
-    extensions += b"\x00\x00"
+    # extensions += b"\x00\x23"
+    # #length: 0 because we indicate that we have no session ticket
+    # extensions += b"\x00\x00"
 
     #extension: encrypt than mac
     #type: encrypt than mac (EtM)
@@ -109,7 +109,8 @@ def verify_key_exch_signature(pkey: RSA.RsaKey, signature: bytes, hash)-> bool:
 
 def prf(secret: bytes, label: bytes, seed: bytes, size: int) -> bytes:
     """
-    TLS 1.2 Pseudo-Random Function using HMAC-SHA384
+    TLS 1.2 Pseudo-Random Function using HMAC-SHA384\n
+    see https://www.rfc-editor.org/rfc/rfc5246#section-5
     """
     def p_hash(secret: bytes, seed: bytes) -> bytes:
         result = b""
@@ -156,3 +157,15 @@ def calc_symetric_key(pre_master_secret: bytes, client_random: bytes, server_ran
     server_write = AES.new(key = server_write_key, mode = AES.MODE_GCM, nonce=server_iv)
 
     return client_write, server_write
+
+def calc_verify_data(master_secret: bytes, all_hs_messages: list[bytes]) -> bytes:
+    """
+    calculation of the verify data field in client-handshake finish\n
+    see https://www.rfc-editor.org/rfc/rfc5246#section-7.4.9
+    """
+    return prf(
+        master_secret,
+        b"client finished",
+        SHA256.new(b"".join(all_hs_messages)).digest(),
+        12
+    )
