@@ -44,10 +44,10 @@ def build_extensions(address: str) -> bytes:
     # extensions += b"\x00\x00"
 
     #extension: encrypt than mac
-    #type: encrypt than mac (EtM)
-    extensions += b"\x00\x16"
-    #length 0: extension length is 0
-    extensions += b"\x00\x00"
+    # #type: encrypt than mac (EtM)
+    # extensions += b"\x00\x16"
+    # #length 0: extension length is 0
+    # extensions += b"\x00\x00"
     
 
     #extension: extended_master_secret
@@ -121,8 +121,21 @@ def prf(secret: bytes, label: bytes, seed: bytes, size: int) -> bytes:
         return result[:size]
 
     return p_hash(secret, label + seed)
+def prfsha256(secret: bytes, label: bytes, seed: bytes, size: int) -> bytes:
+    """
+    TLS 1.2 Pseudo-Random Function using HMAC-SHA384\n
+    see https://www.rfc-editor.org/rfc/rfc5246#section-5
+    """
+    def p_hash(secret: bytes, seed: bytes) -> bytes:
+        result = b""
+        A = seed
+        while len(result) < size:
+            A = HMAC.new(secret, A, SHA384).digest()
+            result += HMAC.new(secret, A + seed, SHA384).digest()
+        return result[:size]
 
-def calc_symetric_key(pre_master_secret: bytes, client_random: bytes, server_random: bytes) -> tuple[_mode_gcm.GcmMode, _mode_gcm.GcmMode] :
+    return p_hash(secret, label + seed)
+def calc_symetric_key(pre_master_secret: bytes, client_random: bytes, server_random: bytes) -> tuple[bytes,bytes,bytes,bytes,bytes] :
     """
     this function receives the vars needed to generate the final aes key in the tls protocol
 
@@ -153,19 +166,18 @@ def calc_symetric_key(pre_master_secret: bytes, client_random: bytes, server_ran
     client_iv = key_block[64:68]
     server_iv = key_block[68:72]
 
-    client_write = AES.new(client_write_key, AES.MODE_GCM, nonce=client_iv)
-    server_write = AES.new(key = server_write_key, mode = AES.MODE_GCM, nonce=server_iv)
+   
+    return client_write_key, client_iv, server_write_key, server_iv, master_secret
 
-    return client_write, server_write
-
-def calc_verify_data(master_secret: bytes, all_hs_messages: list[bytes]) -> bytes:
+def calc_verify_data(master_secret: bytes, all_hs_messages: bytes) -> bytes:
     """
     calculation of the verify data field in client-handshake finish\n
     see https://www.rfc-editor.org/rfc/rfc5246#section-7.4.9
     """
+    
     return prf(
         master_secret,
         b"client finished",
-        SHA256.new(b"".join(all_hs_messages)).digest(),
+        SHA384.new(all_hs_messages).digest(),
         12
     )

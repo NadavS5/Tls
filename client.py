@@ -24,13 +24,14 @@ from Crypto.Hash import SHA384, SHA256
 from Crypto.Util.asn1 import DerBitString, DerSequence #for certs
 from asn1crypto.x509 import Certificate
 from pprint import  pprint
-
-from handshakeutils import build_extensions, verify_signature, verify_key_exch_signature, calc_symetric_key
+import x25519
+from Crypto.Protocol.KDF import PBKDF2
+from handshakeutils import build_extensions, verify_signature, verify_key_exch_signature, calc_symetric_key, calc_verify_data
 from constants import ECDHE_RSA_AES256_GCM_SHA384, RSA_PSS_RSAE_SHA256
 
 class tls_connection:
 
-    message_history: list[bytes]
+    message_history: bytes
 
     client_random: bytes
     client_pre_master: bytes
@@ -44,15 +45,20 @@ class tls_connection:
     client_ec_private: ECC.EccKey
     client_ec_public: ECC.EccKey
 
-    server_write_key: _mode_gcm.GcmMode
-    client_write_key: _mode_gcm.GcmMode
-    encyption_iv: 
+    master_secret: bytes
+    server_write_key: bytes
+    client_write_key: bytes
+    server_implicit_iv: bytes
+    client_implicit_iv: bytes
+
+    explicit_iv: int # counter, when sending bytes this will be converted into 8 bytes 
 
     def __init__(self, address: str, port:int, sock = None):
         self.address = address
         self.port = port
         self.sock = sock
-        self.message_history = []
+        self.message_history = bytes()
+        self.explicit_iv = 0
 
         if not sock:
             self.sock = socket()
@@ -101,7 +107,7 @@ class tls_connection:
         #Handshake, protocol version, handshake message length
         self.sock.send(b"\x16\x03\x03" + len(handshake_msg_full).to_bytes(2) + handshake_msg_full)
 
-        self.message_history.append(handshake_msg_full)
+        self.message_history += (handshake_msg_full)
 
 
     def _recv_server_hello(self):
@@ -118,7 +124,7 @@ class tls_connection:
         self.server_random = server_random
         print(server_random.hex())
 
-        self.message_history.append(server_hello)
+        self.message_history += (server_hello)
         
 
     @staticmethod
@@ -153,7 +159,6 @@ class tls_connection:
         message = self._recv_by_size(tls_packet_length)
 
         handshake_type = message[0]
-        print(handshake_type)
 
         assert handshake_type == 11, "received packet isnt a Certification handshake type "
 
@@ -181,6 +186,8 @@ class tls_connection:
         pkey_ = certs[0].native['tbs_certificate']['subject_public_key_info']['public_key']
         pkey = RSA.construct((pkey_['modulus'], pkey_['public_exponent']))
         self.server_pkey = pkey
+
+        self.message_history += (message)
 
 
     def _recv_key_exchange(self):
@@ -218,14 +225,14 @@ class tls_connection:
         if not verify_key_exch_signature(self.server_pkey, signature, SHA256.new(self.client_random + self.server_random +curve_info+b"\x20"+ pkey)):
             raise Exception("key exchange verification failed")
 
-        self.message_history.append(message)
+        self.message_history += (message)
 
         #recieve server hello done
         data = self._recv_by_size(5)
         header = self._recv_by_size(int.from_bytes(data[3:5]))
         assert header == b"\x0e\x00\x00\x00"
 
-        self.message_history.append(header)
+        self.message_history += (header)
         
     
 
@@ -254,21 +261,24 @@ class tls_connection:
 
         #length of the rest of the message
         record_header += (len(hs_header) + len(pkey)).to_bytes(2)
-
+        
         self.sock.send(record_header + hs_header + pkey)
 
-        self.message_history.append(hs_header + pkey)
+        self.message_history += (hs_header + pkey)
     
     def __calc_symmetric_key(self):
-        print(repr(self.client_ec_private))
-        print(repr(self.server_ec_public))
+        # print(repr(self.client_ec_private))
+        # print(repr(self.server_ec_public))
         def func(*args, **kwargs):
-            client_write, server_write = calc_symetric_key(args[0], self.client_random, self.server_random)
-
+            client_write,client_iv, server_write, server_iv, master_secret = calc_symetric_key(args[0], self.client_random, self.server_random)
+            self.master_secret = master_secret
             self.server_write_key = server_write
             self.client_write_key = client_write
+            self.client_implicit_iv = client_iv
+            self.server_implicit_iv = server_iv
+        # print(x25519.scalar_mult(self.client_ec_private, self.server_ec_public))
+        DH.key_agreement(static_priv= self.client_ec_private,eph_pub= self.server_ec_public, kdf=func)
         
-        pre_master_secret = DH.key_agreement(static_priv= self.client_ec_private,eph_pub= self.server_ec_public, kdf=func)
 
 
     def _send_client_change_cipher(self):
@@ -297,20 +307,28 @@ class tls_connection:
         #serverhellodone
         #clientkeyexchange
 
-        record = b"\x16\x03\x03"
+        record =b"\x16\x03\x03"
 
-        #0x14 (finished)
-        #
+        explicit_nonce = self.explicit_iv.to_bytes(8)
+
         to_encrypt = b"\x14"
+        verify_data = calc_verify_data(self.master_secret, self.message_history)
+        to_encrypt += len(verify_data).to_bytes(3)
+        to_encrypt += verify_data
 
-        #length of verify data
-        to_encrypt ++"\x00\x00\x0c"
+        key = AES.new(key= self.client_write_key, mode = AES.MODE_GCM, nonce= self.client_implicit_iv + explicit_nonce)
+        #aad
+        key.update(explicit_nonce + record + len(to_encrypt).to_bytes(2))
 
+        enc, tag = key.encrypt_and_digest(to_encrypt)
 
+        record += (len(explicit_nonce ) + len(enc) +  len(tag)).to_bytes(2)
 
-        pass
+        full_message = record + explicit_nonce + enc + tag
 
+        self.sock.send(full_message)
 
+        
         
     def connect(self):
 
@@ -323,7 +341,8 @@ class tls_connection:
         self._send_client_key_exchange()
         self.__calc_symmetric_key()
         self._send_client_change_cipher()
-        # self._send_client_handshake_finish()
+        self._send_client_handshake_finish()
+        print(self.sock.recv(1024).hex())
         # self._recv_change_cipher()
         # self._recv_handshake_finish()
     
