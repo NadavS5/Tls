@@ -130,8 +130,8 @@ def prfsha256(secret: bytes, label: bytes, seed: bytes, size: int) -> bytes:
         result = b""
         A = seed
         while len(result) < size:
-            A = HMAC.new(secret, A, SHA384).digest()
-            result += HMAC.new(secret, A + seed, SHA384).digest()
+            A = HMAC.new(secret, A, SHA256).digest()
+            result += HMAC.new(secret, A + seed, SHA256).digest()
         return result[:size]
 
     return p_hash(secret, label + seed)
