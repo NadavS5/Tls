@@ -25,7 +25,10 @@ def build_extensions(address: str) -> bytes:
     
     #extension: ec_point_formats 
     #type: ec_points_formant0x0804
-
+    extensions += b"\x00\x0b"
+    extensions += b"\x00\x02"
+    extensions += b"\x01"
+    extensions += b"\x00"
 
     #extension: supported_groups 
     #type: supported_groups
@@ -135,18 +138,19 @@ def prfsha256(secret: bytes, label: bytes, seed: bytes, size: int) -> bytes:
         return result[:size]
 
     return p_hash(secret, label + seed)
-def calc_symetric_key(pre_master_secret: bytes, client_random: bytes, server_random: bytes) -> tuple[bytes,bytes,bytes,bytes,bytes] :
+def calc_symetric_key(pre_master_secret: bytes, client_random: bytes, server_random: bytes, all_hs_messages: bytes) -> tuple[bytes,bytes,bytes,bytes,bytes] :
     """
     this function receives the vars needed to generate the final aes key in the tls protocol
 
     it returns client_write_key, server_write_key
     """
-
+    #EMS changes the way master_key is derived
+    #https://www.ietf.org/rfc/rfc7627.html#section-4
     #-------master secret-------#
     master_secret = prf(
         pre_master_secret,
-        b"master secret",
-        client_random + server_random,
+        b"extended master secret",
+        SHA384.new(all_hs_messages).digest(),
         48
     )
     

@@ -280,7 +280,7 @@ class tls_connection:
         # print(repr(self.server_ec_public))
         def func(*args, **kwargs):
             self.client_pre_master = args[0]
-            client_write,client_iv, server_write, server_iv, master_secret = calc_symetric_key(args[0], self.client_random, self.server_random)
+            client_write,client_iv, server_write, server_iv, master_secret = calc_symetric_key(args[0], self.client_random, self.server_random, self.message_history)
             self.master_secret = master_secret
             self.server_write_key = server_write
             self.client_write_key = client_write
