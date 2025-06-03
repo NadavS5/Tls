@@ -11,21 +11,17 @@ __author__ = "Nadav Salem"
 
 
 #client command: openssl s_client -connect www.google.com:443 -crlf -cipher 'ECDHE-RSA-AES256-GCM-SHA384' -sigalgs rsa_pss_rsae_sha256 -tls1_2
-#openssl s_client -connect www.google.com:443 -crlf -tls1_2
-#follwing this page: https://tls13.xargs.org/#client-hello/annotated
+#follwing this page: https://tls12.xargs.org/#client-hello/annotated
 
 from socket import socket
 from os import urandom
 from Crypto.Signature import pss 
-from Crypto.Cipher import AES, _mode_gcm
+from Crypto.Cipher import AES
 from Crypto.Protocol import DH
 from Crypto.PublicKey import RSA, ECC
 from Crypto.Hash import SHA384, SHA256
-from Crypto.Util.asn1 import DerBitString, DerSequence #for certs
 from asn1crypto.x509 import Certificate
-from pprint import  pprint
-import x25519
-from Crypto.Protocol.KDF import PBKDF2
+
 from handshakeutils import build_extensions, verify_signature, verify_key_exch_signature, calc_symetric_key, calc_verify_data
 from constants import ECDHE_RSA_AES256_GCM_SHA384, RSA_PSS_RSAE_SHA256
 
@@ -77,6 +73,7 @@ class tls_connection:
             buff += recv
         return buff
 
+    
     def _send_client_hello(self):
         self.client_random = urandom(32)
 
@@ -239,7 +236,6 @@ class tls_connection:
         self.message_history += (header)
         
     
-
     def __generate_keys(self):
         # key = ECC.generate(curve = "curve25519")
         raw_key = bytearray(urandom(32))
@@ -252,8 +248,7 @@ class tls_connection:
         self.client_ec_public = key.public_key()
     
 
-    def _send_client_key_exchange(self):
-        
+    def _send_client_key_exchange(self): 
         #0x20 -> 32 is the length of the curve
         pkey = b"\x20" + self.client_ec_public.export_key(format = "raw")
         
@@ -274,6 +269,7 @@ class tls_connection:
         self.sock.send(record_header + hs_header + pkey)
 
         self.message_history += (hs_header + pkey)
+
     
     def __calc_symmetric_key(self):
         # print(repr(self.client_ec_private))
@@ -288,7 +284,6 @@ class tls_connection:
             self.server_implicit_iv = server_iv
         # print(x25519.scalar_mult(self.client_ec_private, self.server_ec_public))
         DH.key_agreement(eph_priv= self.client_ec_private,eph_pub= self.server_ec_public, kdf=func)
-        
 
 
     def _send_client_change_cipher(self):
@@ -375,7 +370,6 @@ class tls_connection:
                 raise Exception("couldnt verify verify_data")
 
             self.server_seq +=1
-
 
 
 
