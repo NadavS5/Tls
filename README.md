@@ -20,8 +20,9 @@ alternatively you can just run the main file to run simple http request.
 pip install -r requirements.txt
 ```
 > [!NOTE]
-> because the certificate chaining is not implemented you will need to download the wr2 certificate and it will support part of Google's websites
-> [wr2 cert](https://i.pki.goog/wr2.crt)
+> Because the certificate chaining is not implemented yet you will need to download the wr2 certificate and it will support part of Google's websites
+> [wr2 cert](https://i.pki.goog/wr2.crt) <br/>
+> If you want to remove the cert verification remove lines 187 - 188 in client.py
 ## Current Implementation:
 
 - This client uses cipher: ECDHE_RSA_AES256_GCM_SHA384 
