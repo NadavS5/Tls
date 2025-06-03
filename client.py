@@ -328,6 +328,9 @@ class tls_connection:
         self.message_history += to_encrypt
 
         self.client_seq += 1
+        explicit = int.from_bytes(explicit_iv)
+        explicit +=1
+        self.explicit_iv = explicit.to_bytes(8)
 
         print("master", self.master_secret.hex())
         print("cr", self.client_random.hex())
@@ -391,6 +394,53 @@ class tls_connection:
         self._recv_change_cipher()
         self._recv_handshake_finish()
     
+
+    def send(self, data: bytes | bytearray):
+        assert isinstance(data, (bytes, bytearray)), f"data can be only bytes or bytearray not {type(data)}"
+        record = b"\x17\x03\03"
+        
+        key = AES.new(self.client_write_key, AES.MODE_GCM, nonce=(self.client_implicit_iv + self.explicit_iv))
+        key.update(self.client_seq.to_bytes(8) + record + len(data).to_bytes(2))
+
+        enc,tag = key.encrypt_and_digest(data)
+
+        record += (len(self.explicit_iv) + len(enc) + len(tag)).to_bytes(2)
+        
+        self.sock.send(record + self.explicit_iv + enc + tag)
+
+        self.client_seq +=1
+        explicit = int.from_bytes(self.explicit_iv)
+        explicit +=1
+        self.explicit_iv = explicit.to_bytes(8)
+
+
+    def recv(self) -> bytes:
+        data = self._recv_by_size(5)
+        assert data[0] == 0x17, "received message isnt application data"
+        assert data[1:3] == b"\x03\x03", "received tls packet isnt TLS1.2"
+
+        length = int.from_bytes(data[3:5])
+        message = self._recv_by_size(length)
+
+        explicit_iv = message[:8]
+        enc = message[8:-16]
+        tag = message[-16:]
+
+        key = AES.new(self.server_write_key, AES.MODE_GCM, nonce=(self.server_implicit_iv + explicit_iv))
+        key.update(self.server_seq.to_bytes(8) + data[:3] + len(enc).to_bytes(2))
+
+        try:
+            dec = key.decrypt_and_verify(enc, tag)
+        except Exception as e:
+            raise Exception("couldnt decrypt server application data MAC doesnt match")
+        else:
+            self.server_seq +=1
+            return dec
+
+
+    
 if __name__ == "__main__" :
     conn = tls_connection("www.google.com", 443)
     conn.connect()
+    conn.send(b"GET / HTTP/1.1\r\n\r\n")
+    print(conn.recv())
