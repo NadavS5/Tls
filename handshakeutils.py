@@ -5,6 +5,7 @@ from Crypto.PublicKey import RSA
 from Crypto.Signature import PKCS1_v1_5, pss
 from Crypto.Hash import  SHA256, HMAC, SHA384
 from Crypto.Cipher import AES, _mode_gcm
+from typing import Literal
 
 def build_extensions(address: str) -> bytes:
     'this doesnt returns the length field of the whole extensions (extensions Length)'
@@ -173,7 +174,7 @@ def calc_symetric_key(pre_master_secret: bytes, client_random: bytes, server_ran
    
     return client_write_key, client_iv, server_write_key, server_iv, master_secret
 
-def calc_verify_data(master_secret: bytes, all_hs_messages: bytes) -> bytes:
+def calc_verify_data(master_secret: bytes, all_hs_messages: bytes, who: Literal["client", "server"]) -> bytes:
     """
     calculation of the verify data field in client-handshake finish\n
     see https://www.rfc-editor.org/rfc/rfc5246#section-7.4.9
@@ -181,7 +182,7 @@ def calc_verify_data(master_secret: bytes, all_hs_messages: bytes) -> bytes:
     
     return prf(
         master_secret,
-        b"client finished",
+        b"client finished" if who == "client" else b"server finished",
         SHA384.new(all_hs_messages).digest(),
         12
     )

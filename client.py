@@ -311,7 +311,7 @@ class tls_connection:
         record = b"\x16\x03\x03"
         explicit_iv = self.explicit_iv
 
-        verify_data = calc_verify_data(self.master_secret, self.message_history)
+        verify_data = calc_verify_data(self.master_secret, self.message_history, "client")
         to_encrypt = b"\x14"
         to_encrypt += len(verify_data).to_bytes(3, "big")
         to_encrypt += verify_data
@@ -324,6 +324,9 @@ class tls_connection:
         full_message = record + explicit_iv + enc + tag
         self.sock.send(full_message)
 
+        #found this out becaus its all hanshake messages and to_encrypt is kinde hs message
+        self.message_history += to_encrypt
+
         self.client_seq += 1
 
         print("master", self.master_secret.hex())
@@ -332,11 +335,45 @@ class tls_connection:
 
     
     def _recv_change_cipher(self):
-        print(self.sock.recv(1024).hex())
+        data = self._recv_by_size(5)
+        assert data[0] == 0x14, "received message isnt change cipher"
+        assert data[1:3] == b"\x03\x03", "received tls packet isnt TLS1.2"
+        chage_cipher = self._recv_by_size(int.from_bytes(data[3:5]))
+        assert chage_cipher == b"\x01", "message is not server change cipher"
 
 
     def _recv_handshake_finish(self):
-        pass
+        data = self._recv_by_size(5)
+        assert data[0] == 0x16, "received message isnt handshake"
+        assert data[1:3] == b"\x03\x03", "received tls packet isnt TLS1.2"
+        length = int.from_bytes(data[3:5])
+
+        message = self._recv_by_size(length)
+
+        explicit_iv = message[:8]
+        encrypted = message[8:-16]
+        tag = message[-16:]
+
+        key = AES.new(self.server_write_key, AES.MODE_GCM, nonce= (self.server_implicit_iv + explicit_iv))
+        #we can use the length of encrypted because aes keeps the size of the plaintext
+        aad = self.server_seq.to_bytes(8) + b"\x16\x03\03" + len(encrypted).to_bytes(2)
+        key.update(aad)
+
+        try:
+            dec = key.decrypt_and_verify(encrypted, tag)
+        except Exception as e:
+            raise Exception("couldnt verify server handshake finish")
+        else:
+            header = dec[:4]
+            size = int.from_bytes(header[1:])
+            verify_data = dec[4:4+size]
+
+            if verify_data != calc_verify_data(self.master_secret, self.message_history, "server"):
+                raise Exception("couldnt verify verify_data")
+
+            self.server_seq +=1
+
+
 
 
     def connect(self):
