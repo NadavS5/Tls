@@ -7,6 +7,7 @@ from client import tls_connection
 
 #create tls connection object
 connection = tls_connection("www.google.com", 443)
+connection.connect()
 connection.send(b"any byte data you want")
 full_message = connection.recv()
 ```
